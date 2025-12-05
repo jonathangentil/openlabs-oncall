@@ -44,8 +44,8 @@ Sistema web leve para gerenciamento e visualização de escalas de plantão de s
 
 4. Acesse no navegador:
 
-    - **Cliente:** `http://localhost:8080`
-    - **Admin:** `http://localhost:8080/admin.html`
+    - **Cliente:** `http://localhost:80`
+    - **Admin:** `http://localhost:80/admin.html`
     - **Senha Padrão:** `admin123` (Configurável no `main.go`)
 
 ## 🛠️ Compilação para Produção (Linux)

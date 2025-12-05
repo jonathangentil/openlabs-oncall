@@ -26,7 +26,7 @@ Sistema web leve para gerenciamento e visualização de escalas de plantão de s
 1. Clone o repositório:
 
     ```bash
-    git clone https://github.com/seu-usuario/openlabs-oncall.git
+    git clone https://github.com/jonathangentil/openlabs-oncall.git
     cd openlabs-oncall
     ```
 

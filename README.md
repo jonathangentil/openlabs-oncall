@@ -100,23 +100,6 @@ sudo systemctl status plantao
 sudo journalctl -u plantao -f
 ```
 
-## Segurança e Acesso Externo
-
-### Exemplo Nginx
-
-```nginx
-server {
-    listen 80;
-    server_name plantao.openlabs.com.br;
-
-    location / {
-        proxy_pass http://localhost:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
 ## Troubleshooting
 
 ### Erro: GLIBC_2.34 not found

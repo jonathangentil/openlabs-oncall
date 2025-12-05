@@ -6,7 +6,7 @@ Sistema web leve para gerenciamento e visualização de escalas de plantão de s
 ![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=flat&logo=go&logoColor=white)
 ![SQLite](https://img.shields.io/badge/sqlite-%2307405e.svg?style=flat&logo=sqlite&logoColor=white)
 
-## 📋 Funcionalidades
+## Funcionalidades
 
 - **Visão do Cliente (Pública):** Consulta rápida de quem está de plantão no momento, filtrado por sistema/área.
 - **Visão Admin (Protegida):** Painel para cadastro, edição e remoção de plantonistas e escalas.
@@ -14,14 +14,14 @@ Sistema web leve para gerenciamento e visualização de escalas de plantão de s
 - **Single Binary:** O frontend (HTML/CSS/JS) é embutido dentro do executável Go, facilitando o deploy.
 - **Banco de Dados:** SQLite local (arquivo `.db`), sem necessidade de servidores adicionais.
 
-## 🚀 Tecnologias
+## Tecnologias
 
 - **Backend:** Go (Golang) 1.21+
 - **Database:** SQLite (Driver Pure Go `modernc.org/sqlite`)
 - **Frontend:** HTML5, CSS3, JavaScript (Vanilla)
 - **Deploy:** Systemd (Linux Service)
 
-## 💻 Rodando Localmente (Desenvolvimento)
+## Rodando Localmente (Desenvolvimento)
 
 1. Clone o repositório:
 
@@ -48,7 +48,7 @@ Sistema web leve para gerenciamento e visualização de escalas de plantão de s
     - **Admin:** `http://localhost:80/admin.html`
     - **Senha Padrão:** `admin123` (Configurável no `main.go`)
 
-## 🛠️ Compilação para Produção (Linux)
+## Compilação para Produção (Linux)
 
 Para rodar em servidores Linux (inclusive versões antigas como Oracle Linux ou CentOS), gere um binário estático:
 
@@ -58,7 +58,7 @@ Para rodar em servidores Linux (inclusive versões antigas como Oracle Linux ou 
 $env:CGO_ENABLED="0"; $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o escala-plantao
 ```
 
-## ☁️ Instalação no Servidor (Deploy)
+## Instalação no Servidor (Deploy)
 
 ### 1. Preparar Diretório
 
@@ -100,7 +100,7 @@ sudo systemctl status plantao
 sudo journalctl -u plantao -f
 ```
 
-## 🔒 Segurança e Acesso Externo
+## Segurança e Acesso Externo
 
 ### Exemplo Nginx
 
@@ -117,13 +117,10 @@ server {
 }
 ```
 
-## ❓ Troubleshooting
+## Troubleshooting
 
 ### Erro: GLIBC_2.34 not found
 Recompile usando `CGO_ENABLED=0`.
 
 ### Erro: 203/EXEC no Systemd
 Verifique permissão (`chmod +x`) e arquitetura correta.
-
-## ✔️ Licença
-Projeto livre para uso interno e corporativo.

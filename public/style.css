@@ -1,0 +1,235 @@
+/* --- VARIAVEIS E RESET --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --primary: #00A8CC;
+    --primary-hover: #008da8;
+    --dark: #111827;
+    --gray-bg: #F3F4F6;
+    --white: #FFFFFF;
+    --text-main: #374151;
+    --text-light: #6B7280;
+    --border: #E5E7EB;
+    --danger: #EF4444;
+    --radius: 8px;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--gray-bg);
+    color: var(--text-main);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* --- COMPONENTES DE LAYOUT --- */
+header {
+    background-color: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.logo {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.logo span { color: var(--dark); }
+
+.container {
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 2rem;
+    flex: 1;
+}
+
+/* --- TIPOGRAFIA E HERO --- */
+.hero {
+    background-color: var(--dark);
+    color: var(--white);
+    padding: 4rem 2rem;
+    text-align: center;
+    border-bottom: 4px solid var(--primary);
+}
+.hero h1 { font-size: 2.5rem; font-weight: 300; margin-bottom: 1rem; }
+.hero h1 strong { font-weight: 700; }
+.hero p { color: #9CA3AF; font-size: 1.1rem; max-width: 600px; margin: 0 auto; }
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+.section-header h2 { font-size: 1.5rem; font-weight: 600; color: var(--dark); }
+
+/* --- CARDS E FORMULÁRIOS --- */
+.card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 2rem;
+    border: 1px solid var(--border);
+    height: 100%; /* Para alinhar altura no grid */
+    transition: transform 0.2s;
+}
+
+.form-group { margin-bottom: 1rem; }
+.form-grid { display: grid; gap: 1rem; }
+
+label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-light);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+input, select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+    background-color: #F9FAFB;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+input:focus, select:focus {
+    background-color: var(--white);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 168, 204, 0.15);
+}
+
+/* --- BOTÕES --- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    text-decoration: none;
+    font-size: 0.95rem;
+}
+
+.btn-primary { background-color: var(--dark); color: var(--white); width: 100%; }
+.btn-primary:hover { background-color: #000; transform: translateY(-1px); }
+
+.btn-outline { 
+    background: transparent; border: 1px solid var(--border); color: var(--text-main); font-size: 0.85rem; padding: 0.5rem 1rem; 
+}
+.btn-outline:hover { border-color: var(--dark); background: #f9f9f9; }
+
+/* Botões de Ação Pequenos */
+.actions { display: flex; gap: 8px; }
+.btn-icon {
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; border: 1px solid var(--border);
+    background: white; cursor: pointer; color: var(--text-light);
+    transition: all 0.2s;
+}
+.btn-icon:hover { border-color: var(--primary); color: var(--primary); }
+.btn-icon.delete:hover { border-color: var(--danger); color: var(--danger); background: #FEF2F2; }
+
+/* --- TABELAS --- */
+.table-container {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden; /* Arredonda cantos da tabela */
+    border: 1px solid var(--border);
+}
+
+table { width: 100%; border-collapse: collapse; }
+th {
+    background-color: #F9FAFB;
+    text-align: left;
+    padding: 1rem 1.5rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-light);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+}
+td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-main);
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background-color: #F9FAFB; }
+
+.tag-system {
+    display: inline-block;
+    padding: 4px 8px;
+    background-color: #E0F2F1;
+    color: #00796B;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.contact-link { color: var(--dark); font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 5px; }
+.contact-link:hover { color: var(--primary); }
+
+/* --- LISTA DE EQUIPE (ADMIN) --- */
+.team-list {
+    list-style: none;
+    max-height: 350px;
+    overflow-y: auto;
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+.team-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+}
+.team-info strong { display: block; color: var(--dark); }
+.team-info small { color: var(--text-light); }
+
+/* --- LAYOUTS ESPECÍFICOS --- */
+.admin-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr; /* Coluna esquerda menor */
+    gap: 2rem;
+    margin-bottom: 3rem;
+    align-items: start;
+}
+
+/* RESPONSIVIDADE */
+@media (max-width: 768px) {
+    .admin-grid { grid-template-columns: 1fr; }
+    .hero { padding: 3rem 1rem; }
+    .hero h1 { font-size: 2rem; }
+    header { padding: 0 1rem; }
+    .form-grid-dates { flex-direction: column; }
+    td, th { padding: 1rem; }
+}

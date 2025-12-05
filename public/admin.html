@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Labs | Admin</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // Segurança: Se não tiver token, manda pro login
+        if (!localStorage.getItem('adminToken')) {
+            window.location.href = 'login.html';
+        }
+
+        function logout() {
+            localStorage.removeItem('adminToken');
+            window.location.href = 'login.html';
+        }
+    </script>
+</head>
+<body>
+    <header>
+        <div class="logo">open <span>labs</span> <small style="margin-left: 8px; color: #9CA3AF; font-weight: 400; font-size: 0.9em;">ADMIN PANEL</small></div>
+        <div style="display: flex; gap: 10px;">
+            <a href="index.html" class="btn btn-outline" style="text-decoration: none;">Ver Site</a>
+            <button onclick="logout()" class="btn btn-outline" style="border-color: #EF4444; color: #EF4444; background: white;">Sair</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="section-header" style="margin-top: 2rem;">
+            <h2>Gestão de Escala</h2>
+        </div>
+
+        <div class="admin-grid">
+            
+            <div class="card">
+                <h3 style="margin-bottom: 1rem; color: var(--dark);">1. Cadastro de Equipe</h3>
+                <p style="font-size: 0.9rem; color: var(--text-light); margin-bottom: 1.5rem;">Gerencie os plantonistas disponíveis.</p>
+                
+                <div class="form-grid">
+                    <input type="hidden" id="pessoaId">
+                    <input type="text" id="novoNome" placeholder="Nome Completo">
+                    <input type="text" id="novoContato" placeholder="Telefone / WhatsApp">
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" id="btnSalvarPessoa" onclick="salvarPessoa()">+ Adicionar</button>
+                        <button class="btn btn-outline" id="btnCancelarEdicao" onclick="cancelarEdicao()" style="display:none; width: 100%;">Cancelar</button>
+                    </div>
+                </div>
+
+                <ul id="listaPessoas" class="team-list">
+                    </ul>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 1rem; color: var(--dark);">2. Montar Escala do Mês</h3>
+                <p style="font-size: 0.9rem; color: var(--text-light); margin-bottom: 1.5rem;">Defina quem estará ativo em cada período.</p>
+
+                <div class="form-grid">
+                    <div>
+                        <label>Sistema / Área</label>
+                        <select id="sistema">
+                            <option value="AAA">AAA / FULFILLMENT / IAM / NADM</option>
+                            <option value="ALTAIA">ALTAIA / AM</option>
+                            <option value="NETQ">NETQ / SIGO</option>
+                            <option value="NETWIN">NETWIN</option>
+                        </select>
+                    </div>
+
+                    <div style="display: flex; gap: 15px;" class="form-grid-dates">
+                        <div style="flex: 1;">
+                            <label>Data Início</label>
+                            <input type="date" id="dataInicio">
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Data Fim</label>
+                            <input type="date" id="dataFim">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Plantonista Responsável</label>
+                        <select id="selectPessoa">
+                            <option value="">-- Selecione um membro da Equipe --</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary" style="margin-top: 10px;" onclick="adicionarPlantao()">Adicionar à Escala</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-header">
+            <h2>Escala Vigente</h2>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th width="35%">Sistema</th>
+                        <th width="20%">Período</th>
+                        <th width="25%">Nome</th>
+                        <th width="15%">Contato</th>
+                        <th width="5%" style="text-align: center;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="listaAdmin">
+                    </tbody>
+            </table>
+        </div>
+        <div style="height: 4rem;"></div>
+    </div>
+
+    <script src="app.js"></script> 
+    
+    <script>
+        // Script inline para renderização visual da lista de equipe no Admin
+        const originalCarregarPessoas = carregarPessoas;
+        
+        carregarPessoas = async function() {
+            const listaEl = document.getElementById('listaPessoas');
+            const selectEl = document.getElementById('selectPessoa');
+            if (!listaEl) return;
+            
+            // Aqui usamos o token para buscar a lista
+            const headers = getHeaders();
+            const res = await fetch('/api/pessoas', { headers });
+            
+            if (res.status === 401) { logout(); return; }
+
+            const pessoas = await res.json();
+
+            listaEl.innerHTML = '';
+            selectEl.innerHTML = '<option value="">-- Selecione um membro da Equipe --</option>';
+
+            if(pessoas.length === 0) {
+                listaEl.innerHTML = '<li style="padding:1rem; text-align:center; color:#999;">Nenhum membro cadastrado.</li>';
+            }
+
+            pessoas.forEach(p => {
+                const li = document.createElement('li');
+                li.className = 'team-item';
+                li.innerHTML = `
+                    <div class="team-info">
+                        <strong>${p.nome}</strong>
+                        <small>📞 ${p.contato}</small>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-icon" title="Editar" onclick="prepararEdicao('${p.id}', '${p.nome}', '${p.contato}')">✎</button>
+                        <button class="btn-icon delete" title="Remover" onclick="deletarPessoa('${p.id}')">✕</button>
+                    </div>
+                `;
+                listaEl.appendChild(li);
+
+                const option = document.createElement('option');
+                option.value = `${p.nome}|${p.contato}`;
+                option.innerText = p.nome;
+                selectEl.appendChild(option);
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Labs | Login</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { 
+            align-items: center; 
+            justify-content: center; 
+            background-color: #F3F4F6; 
+            min-height: 100vh;
+            display: flex;
+        }
+        .login-card { 
+            max-width: 400px; 
+            width: 100%; 
+            margin: 0 auto; 
+            text-align: center; 
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .logo-login { 
+            font-size: 2rem; 
+            margin-bottom: 2rem; 
+            justify-content: center; 
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            color: #00A8CC;
+        }
+        .logo-login span { color: #111; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo-login">open <span>labs</span></div>
+        <h2 style="margin-bottom: 1.5rem; font-size: 1.25rem; color: #333;">Acesso Administrativo</h2>
+        
+        <form onsubmit="fazerLogin(event)">
+            <div class="form-group" style="text-align: left; margin-bottom: 1rem;">
+                <label style="display:block; margin-bottom: 5px; font-weight: 600; color: #666;">Senha de Acesso</label>
+                <input type="password" id="senhaInput" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Digite sua senha..." required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px; background: #111; color: white; border: none; cursor: pointer; border-radius: 4px;">Entrar no Painel</button>
+        </form>
+        <p style="margin-top: 1.5rem; font-size: 0.9rem;">
+            <a href="index.html" style="color: #666; text-decoration: none;">&larr; Voltar ao site público</a>
+        </p>
+    </div>
+
+    <script>
+        async function fazerLogin(e) {
+            e.preventDefault();
+            const password = document.getElementById('senhaInput').value;
+            
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ password })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    // Salva o token no navegador
+                    localStorage.setItem('adminToken', data.token);
+                    window.location.href = 'admin.html';
+                } else {
+                    alert("Senha incorreta!");
+                    document.getElementById('senhaInput').value = '';
+                }
+            } catch (err) {
+                alert("Erro de conexão.");
+            }
+        }
+
+        // Se já estiver logado, vai direto
+        if (localStorage.getItem('adminToken')) {
+            window.location.href = 'admin.html';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Labs | Escala de Suporte</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    
+    <header>
+        <div class="logo">Open<span>Labs</span></div>
+        <div style="font-size: 0.85rem; color: #6B7280;">An Altice Labs Company</div>
+    </header>
+
+    <section class="hero">
+        <div style="max-width: 800px; margin: 0 auto;">
+            <h1>Escala de plantonistas <strong>Open Labs</strong></h1>
+            <p>Consulte abaixo a escala oficial de plantonistas para acionamento técnico imediato.</p>
+        </div>
+    </section>
+
+    <div class="container" style="margin-top: -3rem;">
+        
+        <div class="card" style="border-top: 4px solid var(--primary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+                <h2 style="font-size: 1.25rem; font-weight: 600;">Soluções que ajudam o seu negócio</h2>
+                
+                <div style="min-width: 300px;"> <select id="filtroSistema" onchange="carregarPlantoes()">
+                        <option value="">Visualizar Todos os Sistemas</option>
+                        <option value="AAA">AAA / FULFILLMENT / IAM / NADM</option>
+                        <option value="ALTAIA">ALTAIA / AM</option>
+                        <option value="NETQ">NETQ / SIGO</option>
+                        <option value="NETWIN">NETWIN</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-container" style="border: none; box-shadow: none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="35%">Sistema</th> 
+                            <th width="20%">Período</th>
+                            <th width="25%">Plantonista</th>
+                            <th width="20%">Contato Direto</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaCliente">
+                        </tbody>
+                </table>
+            </div>
+            
+            <div style="text-align: center; margin-top: 2rem; color: #9CA3AF; font-size: 0.85rem;">
+                Caso não consiga contato, escale para outro plantonista.
+            </div>
+        </div>
+    </div>
+
+    <footer style="text-align: center; padding: 2rem; font-size: 0.85rem; color: #9CA3AF;">
+        &copy; Open Labs - Todos os direitos reservados.
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

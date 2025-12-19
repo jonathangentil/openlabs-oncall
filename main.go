@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"embed"
 	"encoding/json"
@@ -13,13 +14,17 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/crypto/acme/autocert"
 	_ "modernc.org/sqlite"
 )
 
 //go:embed public
 var publicFS embed.FS
 
-const adminPassword = "admin123"
+const (
+	adminPassword = "admin123"
+	domainName    = "plantao.openlabs.com.br" // Domínio configurado
+)
 
 type Plantao struct {
 	ID      int    `json:"id"`
@@ -45,14 +50,22 @@ var db *sql.DB
 func main() {
 	var err error
 
+	// Configuração de diretórios
 	ex, err := os.Executable()
 	if err != nil {
 		log.Fatal("Erro ao descobrir diretório do executável:", err)
 	}
 	exePath := filepath.Dir(ex)
 	dbPath := filepath.Join(exePath, "escala.db")
+	certDir := filepath.Join(exePath, "certs") // Pasta para salvar os certificados
+
+	// Garante que a pasta de certificados existe
+	if _, err := os.Stat(certDir); os.IsNotExist(err) {
+		os.Mkdir(certDir, 0755)
+	}
 
 	fmt.Println("Banco de Dados:", dbPath)
+	fmt.Println("Certificados serão salvos em:", certDir)
 
 	db, err = sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -62,26 +75,47 @@ func main() {
 
 	createTables()
 
+	// Configuração de arquivos estáticos
 	publicDir, err := fs.Sub(publicFS, "public")
 	if err != nil {
 		log.Fatal("Erro ao carregar arquivos estáticos:", err)
 	}
 	http.Handle("/", http.FileServer(http.FS(publicDir)))
 
+	// Rotas da API
 	http.HandleFunc("/api/login", handleLogin)
 	http.HandleFunc("/api/plantoes", authMiddleware(handlePlantoes))
 	http.HandleFunc("/api/plantoes/", authMiddleware(handlePlantaoDelete))
 	http.HandleFunc("/api/pessoas", authMiddleware(handlePessoas))
 	http.HandleFunc("/api/pessoas/", authMiddleware(handlePessoaOperacoes))
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "80"
+	// --- CONFIGURAÇÃO SSL (LETS ENCRYPT) ---
+	fmt.Printf("Iniciando servidor HTTPS para %s na porta 443...\n", domainName)
+
+	certManager := autocert.Manager{
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: autocert.HostWhitelist(domainName),
+		Cache:      autocert.DirCache(certDir),
 	}
 
-	fmt.Println("Servidor rodando em http://localhost:" + port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	server := &http.Server{
+		Addr: ":443",
+		TLSConfig: &tls.Config{
+			GetCertificate: certManager.GetCertificate,
+			// NextProtos é essencial para o desafio TLS-ALPN-01 (Porta 443 apenas)
+			NextProtos: []string{"h2", "http/1.1", "acme-tls/1"},
+		},
+	}
+
+	// Inicia o servidor com TLS.
+	// As strings vazias fazem ele usar o config do GetCertificate acima.
+	err = server.ListenAndServeTLS("", "")
+	if err != nil {
+		log.Fatal("Erro ao iniciar servidor HTTPS:", err)
+	}
 }
+
+// --- FUNÇÕES AUXILIARES (Inalteradas) ---
 
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

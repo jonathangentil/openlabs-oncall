@@ -1,109 +1,165 @@
-# Open Labs On-Call (Escala de Plantonistas)
+# Open Labs | Oncall
 
-Sistema web leve para gerenciamento e visualização de escalas de plantão de suporte técnico. Desenvolvido para ser simples, performático e fácil de implantar em infraestrutura Linux corporativa.
+Sistema de gerenciamento e visualização de escalas de plantão técnico.  
+A aplicação fornece uma interface pública para consulta de plantonistas vigentes e um painel administrativo para gestão da equipe e dos horários.
 
-![Status](https://img.shields.io/badge/status-active-success.svg)
-![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=flat&logo=go&logoColor=white)
-![SQLite](https://img.shields.io/badge/sqlite-%2307405e.svg?style=flat&logo=sqlite&logoColor=white)
-
-## Funcionalidades
-
-- **Visão do Cliente (Pública):** Consulta rápida de quem está de plantão no momento, filtrado por sistema/área.
-- **Visão Admin (Protegida):** Painel para cadastro, edição e remoção de plantonistas e escalas.
-- **Autenticação:** Proteção de rotas de escrita via Token/Senha simples.
-- **Single Binary:** O frontend (HTML/CSS/JS) é embutido dentro do executável Go, facilitando o deploy.
-- **Banco de Dados:** SQLite local (arquivo `.db`), sem necessidade de servidores adicionais.
+---
 
 ## Tecnologias
 
-- **Backend:** Go (Golang) 1.21+
-- **Database:** SQLite (Driver Pure Go `modernc.org/sqlite`)
-- **Frontend:** HTML5, CSS3, JavaScript (Vanilla)
-- **Deploy:** Systemd (Linux Service)
+- **Backend:** Go (Golang) 1.25  
+- **Banco de Dados:** PostgreSQL 15 (via Docker)  
+- **Frontend:** HTML5, CSS3, Vanilla JS (Single Page Application embedded)  
+- **Infraestrutura:** Docker Compose e Systemd (Oracle Linux)  
+- **Segurança:** HTTPS automático (Let's Encrypt / Autocert)
 
-## Rodando Localmente (Desenvolvimento)
+---
 
-1. Clone o repositório:
+## Funcionalidades
 
-    ```bash
-    git clone https://github.com/jonathangentil/openlabs-oncall.git
-    cd openlabs-oncall
-    ```
+### Visualização Pública
+- Consulta rápida de quem está de plantão no momento
+- Filtro por sistema: AAA, ALTAIA, NETQ, NETWIN
 
-2. Instale as dependências:
+### Painel Administrativo
+- Autenticação via token
+- Cadastro, edição e remoção de membros da equipe
+- Montagem de escala por período
+- Histórico de escalas
 
-    ```bash
-    go mod tidy
-    ```
+### Outros Recursos
+- Integração Docker: banco de dados isolado em container
+- Modo híbrido:
+  - Execução local (`-dev`) em HTTP
+  - Produção com HTTPS automático
 
-3. Execute o projeto:
+---
 
-    ```bash
-    go run .
-    ```
+## Pré-requisitos
 
-4. Acesse no navegador:
+- Go (versão 1.21 ou superior)
+- Docker e Docker Compose
+- Git
 
-    - **Cliente:** `http://localhost:80`
-    - **Admin:** `http://localhost:80/admin.html`
-    - **Senha Padrão:** `admin123` (Configurável no `main.go`)
+---
 
-## Compilação para Produção (Linux)
+## Configuração e Execução (Local)
 
-Para rodar em servidores Linux (inclusive versões antigas como Oracle Linux ou CentOS), gere um binário estático:
+### 1. Clone o repositório
 
-### No Windows PowerShell:
+```bash
+git clone https://seu-repositorio/escala-plantao.git
+cd escala-plantao
+```
+
+### 2. Suba o Banco de Dados
+
+O projeto utiliza um `docker-compose.yml` que sobe o PostgreSQL na porta **15432**.
+
+```bash
+docker-compose up -d
+```
+
+### 3. Execute a Aplicação
+
+Utilize a flag `-dev` para rodar em modo HTTP na porta **8080**.  
+A aplicação irá conectar automaticamente no banco local.
+
+```bash
+go run . -dev
+```
+
+### 4. Acesse
+
+- Interface pública: http://localhost:8080  
+- Login Admin: http://localhost:8080/login.html  
+- Senha Admin (padrão): `J727HCfmF4dL9P36n9rr`  
+  - Definida diretamente no `main.go`
+
+---
+
+## Deploy em Produção (Linux Server)
+
+Em produção, a aplicação roda como um serviço **Systemd** e o banco de dados via **Docker**.
+
+### 1. Banco de Dados
+
+Certifique-se de que o Docker está rodando e inicie o container:
+
+```bash
+cd /opt/plantao
+docker-compose up -d
+```
+
+### 2. Compilação
+
+Gere o binário compatível com Linux AMD64:
 
 ```powershell
-$env:CGO_ENABLED="0"; $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o escala-plantao
+# No PowerShell
+$env:CGO_ENABLED="0"
+$env:GOOS="linux"
+$env:GOARCH="amd64"
+go build -o escala-plantao
 ```
 
-## Instalação no Servidor (Deploy)
+### 3. Instalação do Serviço
 
-### 1. Preparar Diretório
+- Mova o binário para `/opt/plantao`
+- Configure o arquivo `/etc/systemd/system/plantao.service`
 
-```bash
-sudo mkdir -p /opt/plantao
-sudo chmod +x /opt/plantao/escala-plantao
-```
+#### Variáveis de Ambiente Necessárias
 
-### 2. Criar Serviço Systemd
+O Systemd deve injetar as variáveis para conectar na porta externa do Docker (**15432**):
 
 ```ini
-[Unit]
-Description=Servico Escala Plantonistas Open Labs
-After=network.target
-
-[Service]
-WorkingDirectory=/opt/plantao
-ExecStart=/opt/plantao/escala-plantao
-Restart=always
-RestartSec=5
-User=root
-
-[Install]
-WantedBy=multi-user.target
+Environment="DB_HOST=localhost"
+Environment="DB_PORT=15432"
+Environment="DB_USER=admin"
+Environment="DB_PASS=rr01dYZA6ltjP11lu0e2"
+Environment="DB_NAME=escala_db"
 ```
 
-### 3. Iniciar o Serviço
+### 4. Comandos de Gerenciamento
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable plantao
+# Iniciar serviço
 sudo systemctl start plantao
-```
 
-### 4. Verificar Status e Logs
-
-```bash
-sudo systemctl status plantao
+# Verificar logs
 sudo journalctl -u plantao -f
 ```
 
-## Troubleshooting
+---
 
-### Erro: GLIBC_2.34 not found
-Recompile usando `CGO_ENABLED=0`.
+## Estrutura do Projeto
 
-### Erro: 203/EXEC no Systemd
-Verifique permissão (`chmod +x`) e arquitetura correta.
+```text
+/
+├── main.go               # Código fonte principal (Go Server)
+├── docker-compose.yml    # Orquestração do PostgreSQL
+├── go.mod / go.sum       # Gerenciamento de dependências
+├── public/               # Frontend estático (embarcado no binário)
+│   ├── index.html        # Visão pública
+│   ├── admin.html        # Painel administrativo
+│   ├── login.html        # Tela de login
+│   ├── app.js            # Lógica do frontend
+│   └── style.css         # Estilização
+└── certs/                # Certificados SSL automáticos (gerados em produção)
+```
+
+---
+
+## Variáveis de Ambiente
+
+A aplicação aceita as seguintes variáveis de ambiente (padrões definidos no código):
+
+| Variável   | Padrão        | Descrição                         |
+|------------|---------------|-----------------------------------|
+| DB_HOST    | localhost     | Host do PostgreSQL                |
+| DB_PORT    | 15432         | Porta mapeada no Docker Host      |
+| DB_USER    | admin         | Usuário do banco de dados         |
+| DB_PASS    | adminpassword | Senha do banco de dados           |
+| DB_NAME    | escala_db     | Nome do database                  |
+
+---

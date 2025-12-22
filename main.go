@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -14,16 +15,16 @@ import (
 	"strconv"
 	"strings"
 
+	_ "github.com/lib/pq"
 	"golang.org/x/crypto/acme/autocert"
-	_ "modernc.org/sqlite"
 )
 
 //go:embed public
 var publicFS embed.FS
 
 const (
-	adminPassword = "admin123"
-	domainName    = "plantao.openlabs.com.br" // Domínio configurado
+	adminPassword = "J727HCfmF4dL9P36n9rr"
+	domainName    = "plantao.openlabs.com.br"
 )
 
 type Plantao struct {
@@ -50,26 +51,39 @@ var db *sql.DB
 func main() {
 	var err error
 
-	// Configuração de diretórios
+	// Configuração de diretórios (Mantido para certificados)
 	ex, err := os.Executable()
 	if err != nil {
 		log.Fatal("Erro ao descobrir diretório do executável:", err)
 	}
 	exePath := filepath.Dir(ex)
-	dbPath := filepath.Join(exePath, "escala.db")
-	certDir := filepath.Join(exePath, "certs") // Pasta para salvar os certificados
+	certDir := filepath.Join(exePath, "certs")
 
-	// Garante que a pasta de certificados existe
 	if _, err := os.Stat(certDir); os.IsNotExist(err) {
 		os.Mkdir(certDir, 0755)
 	}
 
-	fmt.Println("Banco de Dados:", dbPath)
-	fmt.Println("Certificados serão salvos em:", certDir)
+	// --- CONEXÃO COM POSTGRES ---
+	// Se houver variáveis de ambiente, usa elas. Senão, usa o padrão do Docker local.
+	dbHost := getEnv("DB_HOST", "localhost")
+	dbPort := getEnv("DB_PORT", "15432")
+	dbUser := getEnv("DB_USER", "admin")
+	dbPass := getEnv("DB_PASS", "rr01dYZA6ltjP11lu0e2")
+	dbName := getEnv("DB_NAME", "escala_db")
 
-	db, err = sql.Open("sqlite", dbPath)
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		dbHost, dbPort, dbUser, dbPass, dbName)
+
+	fmt.Println("Conectando ao Postgres...")
+	db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		log.Fatal("Erro fatal ao abrir banco:", err)
+		log.Fatal("Erro ao abrir conexão com o banco:", err)
+	}
+
+	// Testar conexão
+	err = db.Ping()
+	if err != nil {
+		log.Fatal("Não foi possível conectar ao banco de dados (verifique se o Docker está rodando):", err)
 	}
 	defer db.Close()
 
@@ -89,33 +103,45 @@ func main() {
 	http.HandleFunc("/api/pessoas", authMiddleware(handlePessoas))
 	http.HandleFunc("/api/pessoas/", authMiddleware(handlePessoaOperacoes))
 
-	// --- CONFIGURAÇÃO SSL (LETS ENCRYPT) ---
-	fmt.Printf("Iniciando servidor HTTPS para %s na porta 443...\n", domainName)
+	// --- INICIALIZAÇÃO DO SERVIDOR ---
+	devMode := flag.Bool("dev", false, "Rodar em modo local (localhost) na porta 8080")
+	flag.Parse()
 
-	certManager := autocert.Manager{
-		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist(domainName),
-		Cache:      autocert.DirCache(certDir),
-	}
-
-	server := &http.Server{
-		Addr: ":443",
-		TLSConfig: &tls.Config{
-			GetCertificate: certManager.GetCertificate,
-			// NextProtos é essencial para o desafio TLS-ALPN-01 (Porta 443 apenas)
-			NextProtos: []string{"h2", "http/1.1", "acme-tls/1"},
-		},
-	}
-
-	// Inicia o servidor com TLS.
-	// As strings vazias fazem ele usar o config do GetCertificate acima.
-	err = server.ListenAndServeTLS("", "")
-	if err != nil {
-		log.Fatal("Erro ao iniciar servidor HTTPS:", err)
+	if *devMode {
+		fmt.Println("------------------------------------------------")
+		fmt.Println(">> MODO DEV ATIVADO")
+		fmt.Println(">> Servidor rodando em: http://localhost:8080")
+		fmt.Println("------------------------------------------------")
+		log.Fatal(http.ListenAndServe(":8080", nil))
+	} else {
+		fmt.Printf(">> MODO PRODUÇÃO: HTTPS para %s na porta 443...\n", domainName)
+		certManager := autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(domainName),
+			Cache:      autocert.DirCache(certDir),
+		}
+		server := &http.Server{
+			Addr: ":443",
+			TLSConfig: &tls.Config{
+				GetCertificate: certManager.GetCertificate,
+				NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
+			},
+		}
+		go http.ListenAndServe(":80", certManager.HTTPHandler(nil))
+		err = server.ListenAndServeTLS("", "")
+		if err != nil {
+			log.Fatal("Erro ao iniciar servidor HTTPS:", err)
+		}
 	}
 }
 
-// --- FUNÇÕES AUXILIARES (Inalteradas) ---
+// Helper para ler env vars
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}
 
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -152,18 +178,28 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func createTables() {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS plantoes (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		sistema TEXT, periodo TEXT, nome TEXT, contato TEXT, data_fim TEXT
-	);`)
+
+	queryPlantoes := `CREATE TABLE IF NOT EXISTS plantoes (
+		id SERIAL PRIMARY KEY,
+		sistema TEXT, 
+		periodo TEXT, 
+		nome TEXT, 
+		contato TEXT, 
+		data_fim TEXT
+	);`
+
+	_, err := db.Exec(queryPlantoes)
 	if err != nil {
 		log.Println("Erro tabela plantoes:", err)
 	}
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS pessoas (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		nome TEXT, contato TEXT
-	);`)
+	queryPessoas := `CREATE TABLE IF NOT EXISTS pessoas (
+		id SERIAL PRIMARY KEY,
+		nome TEXT, 
+		contato TEXT
+	);`
+
+	_, err = db.Exec(queryPessoas)
 	if err != nil {
 		log.Println("Erro tabela pessoas:", err)
 	}
@@ -174,6 +210,7 @@ func handlePlantoes(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		rows, err := db.Query("SELECT id, sistema, periodo, nome, contato, data_fim FROM plantoes ORDER BY data_fim ASC")
 		if err != nil {
+			log.Println("Erro Select:", err)
 			http.Error(w, "Erro BD", 500)
 			return
 		}
@@ -196,13 +233,21 @@ func handlePlantoes(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "JSON", 400)
 			return
 		}
-		res, err := db.Exec("INSERT INTO plantoes(sistema, periodo, nome, contato, data_fim) VALUES(?, ?, ?, ?, ?)", p.Sistema, p.Periodo, p.Nome, p.Contato, p.DataFim)
+
+		var newID int
+		err := db.QueryRow(`
+			INSERT INTO plantoes(sistema, periodo, nome, contato, data_fim) 
+			VALUES($1, $2, $3, $4, $5) RETURNING id`,
+			p.Sistema, p.Periodo, p.Nome, p.Contato, p.DataFim,
+		).Scan(&newID)
+
 		if err != nil {
+			log.Println("Erro Insert Plantão:", err)
 			http.Error(w, "Erro BD", 500)
 			return
 		}
-		id, _ := res.LastInsertId()
-		p.ID = int(id)
+
+		p.ID = newID
 		json.NewEncoder(w).Encode(p)
 	}
 }
@@ -210,8 +255,10 @@ func handlePlantoes(w http.ResponseWriter, r *http.Request) {
 func handlePlantaoDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "DELETE" {
 		idStr := strings.TrimPrefix(r.URL.Path, "/api/plantoes/")
-		_, err := db.Exec("DELETE FROM plantoes WHERE id = ?", idStr)
+
+		_, err := db.Exec("DELETE FROM plantoes WHERE id = $1", idStr)
 		if err != nil {
+			log.Println("Erro Delete Plantão:", err)
 			http.Error(w, "Erro BD", 500)
 			return
 		}
@@ -224,6 +271,7 @@ func handlePessoas(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		rows, err := db.Query("SELECT id, nome, contato FROM pessoas ORDER BY nome ASC")
 		if err != nil {
+			log.Println("Erro Select Pessoas:", err)
 			http.Error(w, "Erro BD", 500)
 			return
 		}
@@ -241,13 +289,16 @@ func handlePessoas(w http.ResponseWriter, r *http.Request) {
 	} else if r.Method == "POST" {
 		var p Pessoa
 		json.NewDecoder(r.Body).Decode(&p)
-		res, err := db.Exec("INSERT INTO pessoas(nome, contato) VALUES(?, ?)", p.Nome, p.Contato)
+
+		var newID int
+		err := db.QueryRow("INSERT INTO pessoas(nome, contato) VALUES($1, $2) RETURNING id", p.Nome, p.Contato).Scan(&newID)
+
 		if err != nil {
+			log.Println("Erro Insert Pessoa:", err)
 			http.Error(w, "Erro BD", 500)
 			return
 		}
-		id, _ := res.LastInsertId()
-		p.ID = int(id)
+		p.ID = newID
 		json.NewEncoder(w).Encode(p)
 	}
 }
@@ -255,13 +306,22 @@ func handlePessoas(w http.ResponseWriter, r *http.Request) {
 func handlePessoaOperacoes(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/api/pessoas/")
 	id, _ := strconv.Atoi(idStr)
+
 	if r.Method == "DELETE" {
-		db.Exec("DELETE FROM pessoas WHERE id = ?", id)
+
+		_, err := db.Exec("DELETE FROM pessoas WHERE id = $1", id)
+		if err != nil {
+			log.Println("Erro Delete Pessoa:", err)
+		}
 		w.WriteHeader(http.StatusOK)
 	} else if r.Method == "PUT" {
 		var p Pessoa
 		json.NewDecoder(r.Body).Decode(&p)
-		db.Exec("UPDATE pessoas SET nome = ?, contato = ? WHERE id = ?", p.Nome, p.Contato, id)
+
+		_, err := db.Exec("UPDATE pessoas SET nome = $1, contato = $2 WHERE id = $3", p.Nome, p.Contato, id)
+		if err != nil {
+			log.Println("Erro Update Pessoa:", err)
+		}
 		w.WriteHeader(http.StatusOK)
 	}
 }

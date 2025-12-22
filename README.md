@@ -48,7 +48,7 @@ A aplicação fornece uma interface pública para consulta de plantonistas vigen
 ### 1. Clone o repositório
 
 ```bash
-git clone https://seu-repositorio/escala-plantao.git
+git clone https://jonathangentil/escala-plantao.git
 cd escala-plantao
 ```
 
@@ -73,7 +73,7 @@ go run . -dev
 
 - Interface pública: http://localhost:8080  
 - Login Admin: http://localhost:8080/login.html  
-- Senha Admin (padrão): `J727HCfmF4dL9P36n9rr`  
+- Senha Admin (padrão): `admin_123`  
   - Definida diretamente no `main.go`
 
 ---
@@ -114,10 +114,10 @@ O Systemd deve injetar as variáveis para conectar na porta externa do Docker (*
 
 ```ini
 Environment="DB_HOST=localhost"
-Environment="DB_PORT=15432"
-Environment="DB_USER=admin"
-Environment="DB_PASS=rr01dYZA6ltjP11lu0e2"
-Environment="DB_NAME=escala_db"
+Environment="DB_PORT=5432"
+Environment="DB_USER=USUARIO_ADMIN"
+Environment="DB_PASS=SENHA_BANCO_DE_DADOS"
+Environment="DB_NAME=NOME_BANCO_DE_DADOS"
 ```
 
 ### 4. Comandos de Gerenciamento

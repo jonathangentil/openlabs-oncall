@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/joho/godotenv" // Import para ler .env
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -22,9 +23,10 @@ import (
 //go:embed public
 var publicFS embed.FS
 
+// Valores padrão (fallback) caso não estejam no .env
 const (
-	adminPassword = "admin_123"
-	domainName    = "plantao.openlabs.com.br"
+	defaultAdminPassword = "admin_123"
+	defaultDomainName    = "plantao.openlabs.com.br"
 )
 
 type Plantao struct {
@@ -51,7 +53,13 @@ var db *sql.DB
 func main() {
 	var err error
 
-	// Configuração de diretórios (Mantido para certificados)
+	// 1. Tenta carregar variáveis do arquivo .env
+	// Se der erro (ex: em produção não tem arquivo), apenas avisa e segue usando env vars do sistema
+	if err := godotenv.Load(); err != nil {
+		log.Println("Info: Arquivo .env não encontrado. Usando variáveis de ambiente do sistema.")
+	}
+
+	// Configuração de diretórios para certificados
 	ex, err := os.Executable()
 	if err != nil {
 		log.Fatal("Erro ao descobrir diretório do executável:", err)
@@ -64,28 +72,30 @@ func main() {
 	}
 
 	// --- CONEXÃO COM POSTGRES ---
-	// Se houver variáveis de ambiente, usa elas. Senão, usa o padrão do Docker local.
+	// Pega do .env ou usa defaults
 	dbHost := getEnv("DB_HOST", "localhost")
-	dbPort := getEnv("DB_PORT", "15432")
+	// Nota: DB_PORT_EXTERNAL é o nome que usamos no .env para a porta exposta
+	dbPort := getEnv("DB_PORT_EXTERNAL", "5432")
 	dbUser := getEnv("DB_USER", "admin")
-	dbPass := getEnv("DB_PASS", "admin_123")
+	dbPass := getEnv("DB_PASS", "admin_123") // Fallback de segurança fraca apenas para dev
 	dbName := getEnv("DB_NAME", "escala_db")
 
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
 
-	fmt.Println("Conectando ao Postgres...")
+	fmt.Printf("Conectando ao Postgres em %s:%s...\n", dbHost, dbPort)
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		log.Fatal("Erro ao abrir conexão com o banco:", err)
+		log.Fatal("Erro ao abrir driver do banco:", err)
 	}
 
-	// Testar conexão
+	// Testar conexão (Ping)
 	err = db.Ping()
 	if err != nil {
-		log.Fatal("Não foi possível conectar ao banco de dados (verifique se o Docker está rodando):", err)
+		log.Fatalf("ERRO FATAL: Não foi possível conectar ao banco de dados em %s:%s.\nVerifique se o Docker está rodando e se as credenciais no .env estão corretas.\nErro: %v", dbHost, dbPort, err)
 	}
 	defer db.Close()
+	fmt.Println(">> Conexão com Banco de Dados estabelecida com sucesso!")
 
 	createTables()
 
@@ -107,6 +117,8 @@ func main() {
 	devMode := flag.Bool("dev", false, "Rodar em modo local (localhost) na porta 8080")
 	flag.Parse()
 
+	domain := getEnv("DOMAIN_NAME", defaultDomainName)
+
 	if *devMode {
 		fmt.Println("------------------------------------------------")
 		fmt.Println(">> MODO DEV ATIVADO")
@@ -114,10 +126,10 @@ func main() {
 		fmt.Println("------------------------------------------------")
 		log.Fatal(http.ListenAndServe(":8080", nil))
 	} else {
-		fmt.Printf(">> MODO PRODUÇÃO: HTTPS para %s na porta 443...\n", domainName)
+		fmt.Printf(">> MODO PRODUÇÃO: HTTPS para %s na porta 443...\n", domain)
 		certManager := autocert.Manager{
 			Prompt:     autocert.AcceptTOS,
-			HostPolicy: autocert.HostWhitelist(domainName),
+			HostPolicy: autocert.HostWhitelist(domain),
 			Cache:      autocert.DirCache(certDir),
 		}
 		server := &http.Server{
@@ -127,7 +139,10 @@ func main() {
 				NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
 			},
 		}
+
+		// Redirecionamento HTTP -> HTTPS
 		go http.ListenAndServe(":80", certManager.HTTPHandler(nil))
+
 		err = server.ListenAndServeTLS("", "")
 		if err != nil {
 			log.Fatal("Erro ao iniciar servidor HTTPS:", err)
@@ -135,7 +150,7 @@ func main() {
 	}
 }
 
-// Helper para ler env vars
+// Helper para ler env vars com valor padrão
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
@@ -143,6 +158,7 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
+// Middleware de Autenticação
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
@@ -150,7 +166,11 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		token := r.Header.Get("Authorization")
-		if token != adminPassword {
+
+		// Compara com a senha do .env ou o default
+		adminPass := getEnv("ADMIN_PASSWORD", defaultAdminPassword)
+
+		if token != adminPass {
 			http.Error(w, "Acesso Negado.", http.StatusUnauthorized)
 			return
 		}
@@ -168,17 +188,21 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "JSON inválido", 400)
 		return
 	}
-	if req.Password == adminPassword {
+
+	adminPass := getEnv("ADMIN_PASSWORD", defaultAdminPassword)
+
+	if req.Password == adminPass {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"token": "` + adminPassword + `"}`))
+		// Retorna o próprio token (senha) para o front armazenar
+		w.Write([]byte(`{"token": "` + adminPass + `"}`))
 	} else {
 		http.Error(w, "Senha incorreta", http.StatusUnauthorized)
 	}
 }
 
 func createTables() {
-
+	// Postgres: SERIAL para auto-incremento
 	queryPlantoes := `CREATE TABLE IF NOT EXISTS plantoes (
 		id SERIAL PRIMARY KEY,
 		sistema TEXT, 
@@ -190,7 +214,7 @@ func createTables() {
 
 	_, err := db.Exec(queryPlantoes)
 	if err != nil {
-		log.Println("Erro tabela plantoes:", err)
+		log.Println("Erro ao criar tabela plantoes:", err)
 	}
 
 	queryPessoas := `CREATE TABLE IF NOT EXISTS pessoas (
@@ -201,24 +225,26 @@ func createTables() {
 
 	_, err = db.Exec(queryPessoas)
 	if err != nil {
-		log.Println("Erro tabela pessoas:", err)
+		log.Println("Erro ao criar tabela pessoas:", err)
 	}
 }
 
 func handlePlantoes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
 	if r.Method == "GET" {
 		rows, err := db.Query("SELECT id, sistema, periodo, nome, contato, data_fim FROM plantoes ORDER BY data_fim ASC")
 		if err != nil {
 			log.Println("Erro Select:", err)
-			http.Error(w, "Erro BD", 500)
+			http.Error(w, "Erro no Banco de Dados", 500)
 			return
 		}
 		defer rows.Close()
+
 		var lista []Plantao
 		for rows.Next() {
 			var p Plantao
-			var df sql.NullString
+			var df sql.NullString // Trata NULLs se houver
 			rows.Scan(&p.ID, &p.Sistema, &p.Periodo, &p.Nome, &p.Contato, &df)
 			p.DataFim = df.String
 			lista = append(lista, p)
@@ -227,13 +253,15 @@ func handlePlantoes(w http.ResponseWriter, r *http.Request) {
 			lista = []Plantao{}
 		}
 		json.NewEncoder(w).Encode(lista)
+
 	} else if r.Method == "POST" {
 		var p Plantao
 		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-			http.Error(w, "JSON", 400)
+			http.Error(w, "JSON inválido", 400)
 			return
 		}
 
+		// Postgres: Placeholders $1, $2... e RETURNING id
 		var newID int
 		err := db.QueryRow(`
 			INSERT INTO plantoes(sistema, periodo, nome, contato, data_fim) 
@@ -243,7 +271,7 @@ func handlePlantoes(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			log.Println("Erro Insert Plantão:", err)
-			http.Error(w, "Erro BD", 500)
+			http.Error(w, "Erro ao inserir no Banco", 500)
 			return
 		}
 
@@ -256,10 +284,11 @@ func handlePlantaoDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "DELETE" {
 		idStr := strings.TrimPrefix(r.URL.Path, "/api/plantoes/")
 
+		// Placeholder $1
 		_, err := db.Exec("DELETE FROM plantoes WHERE id = $1", idStr)
 		if err != nil {
 			log.Println("Erro Delete Plantão:", err)
-			http.Error(w, "Erro BD", 500)
+			http.Error(w, "Erro ao deletar no Banco", 500)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -268,14 +297,16 @@ func handlePlantaoDelete(w http.ResponseWriter, r *http.Request) {
 
 func handlePessoas(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
 	if r.Method == "GET" {
 		rows, err := db.Query("SELECT id, nome, contato FROM pessoas ORDER BY nome ASC")
 		if err != nil {
 			log.Println("Erro Select Pessoas:", err)
-			http.Error(w, "Erro BD", 500)
+			http.Error(w, "Erro no Banco de Dados", 500)
 			return
 		}
 		defer rows.Close()
+
 		var lista []Pessoa
 		for rows.Next() {
 			var p Pessoa
@@ -286,16 +317,21 @@ func handlePessoas(w http.ResponseWriter, r *http.Request) {
 			lista = []Pessoa{}
 		}
 		json.NewEncoder(w).Encode(lista)
+
 	} else if r.Method == "POST" {
 		var p Pessoa
-		json.NewDecoder(r.Body).Decode(&p)
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			http.Error(w, "JSON inválido", 400)
+			return
+		}
 
+		// RETURNING id e placeholders
 		var newID int
 		err := db.QueryRow("INSERT INTO pessoas(nome, contato) VALUES($1, $2) RETURNING id", p.Nome, p.Contato).Scan(&newID)
 
 		if err != nil {
 			log.Println("Erro Insert Pessoa:", err)
-			http.Error(w, "Erro BD", 500)
+			http.Error(w, "Erro ao inserir pessoa", 500)
 			return
 		}
 		p.ID = newID
@@ -305,24 +341,35 @@ func handlePessoas(w http.ResponseWriter, r *http.Request) {
 
 func handlePessoaOperacoes(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/api/pessoas/")
-	id, _ := strconv.Atoi(idStr)
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "ID inválido", 400)
+		return
+	}
 
 	if r.Method == "DELETE" {
-
 		_, err := db.Exec("DELETE FROM pessoas WHERE id = $1", id)
 		if err != nil {
 			log.Println("Erro Delete Pessoa:", err)
+			http.Error(w, "Erro ao deletar", 500)
+			return
 		}
 		w.WriteHeader(http.StatusOK)
+
 	} else if r.Method == "PUT" {
 		var p Pessoa
-		json.NewDecoder(r.Body).Decode(&p)
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			http.Error(w, "JSON inválido", 400)
+			return
+		}
 
+		// Placeholders $1, $2, $3
 		_, err := db.Exec("UPDATE pessoas SET nome = $1, contato = $2 WHERE id = $3", p.Nome, p.Contato, id)
 		if err != nil {
 			log.Println("Erro Update Pessoa:", err)
+			http.Error(w, "Erro ao atualizar", 500)
+			return
 		}
 		w.WriteHeader(http.StatusOK)
 	}
 }
-

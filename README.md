@@ -1,165 +1,178 @@
-# Open Labs | Oncall
+# Manual de Operação – Sistema de Escala de Plantonistas (v2.1)
 
-Sistema de gerenciamento e visualização de escalas de plantão técnico.  
-A aplicação fornece uma interface pública para consulta de plantonistas vigentes e um painel administrativo para gestão da equipe e dos horários.
-
----
-
-## Tecnologias
-
-- **Backend:** Go (Golang) 1.25  
-- **Banco de Dados:** PostgreSQL 15 (via Docker)  
-- **Frontend:** HTML5, CSS3, Vanilla JS (Single Page Application embedded)  
-- **Infraestrutura:** Docker Compose e Systemd (Oracle Linux)  
-- **Segurança:** HTTPS automático (Let's Encrypt / Autocert)
+**Aplicação:** Escala de Plantão – Open Labs  
+**Tecnologia:** Go (Golang) + PostgreSQL (Docker)  
+**Execução:** Aplicação via Systemd / Banco de Dados via Docker Compose  
+**URL:** https://plantao.openlabs.com.br  
 
 ---
 
-## Funcionalidades
+## 1. Arquitetura do Sistema
 
-### Visualização Pública
-- Consulta rápida de quem está de plantão no momento
-- Filtro por sistema: AAA, ALTAIA, NETQ, NETWIN
+O sistema opera em uma **arquitetura híbrida**, garantindo performance, segurança e facilidade de gestão.
 
-### Painel Administrativo
-- Autenticação via token
-- Cadastro, edição e remoção de membros da equipe
-- Montagem de escala por período
-- Histórico de escalas
+### Componentes
 
-### Outros Recursos
-- Integração Docker: banco de dados isolado em container
-- Modo híbrido:
-  - Execução local (`-dev`) em HTTP
-  - Produção com HTTPS automático
+- **Backend**
+  - Binário único escrito em **Go**
+  - Serve API e arquivos estáticos
+  - Gerenciado pelo **Systemd**
 
----
+- **Banco de Dados**
+  - **PostgreSQL 15**
+  - Executando em container **Docker** isolado
 
-## Pré-requisitos
+- **Comunicação**
+  - Conexão via TCP
+  - Porta **15432** (mapeada para `localhost`)
 
-- Go (versão 1.21 ou superior)
-- Docker e Docker Compose
-- Git
+- **Configuração**
+  - **Local:** leitura de arquivo `.env`
+  - **Produção:** variáveis de ambiente injetadas pelo Systemd
 
----
-
-## Configuração e Execução (Local)
-
-### 1. Clone o repositório
-
-```bash
-git clone https://jonathangentil/escala-plantao.git
-cd escala-plantao
-```
-
-### 2. Suba o Banco de Dados
-
-O projeto utiliza um `docker-compose.yml` que sobe o PostgreSQL na porta **15432**.
-
-```bash
-docker-compose up -d
-```
-
-### 3. Execute a Aplicação
-
-Utilize a flag `-dev` para rodar em modo HTTP na porta **8080**.  
-A aplicação irá conectar automaticamente no banco local.
-
-```bash
-go run . -dev
-```
-
-### 4. Acesse
-
-- Interface pública: http://localhost:8080  
-- Login Admin: http://localhost:8080/login.html  
-- Senha Admin (padrão): `admin_123`  
-  - Definida diretamente no `main.go`
+- **Segurança**
+  - HTTPS automático via **Let’s Encrypt**
+  - Porta **443**
 
 ---
 
-## Deploy em Produção (Linux Server)
+## 2. Estrutura de Arquivos
 
-Em produção, a aplicação roda como um serviço **Systemd** e o banco de dados via **Docker**.
+Todos os componentes residem em `/opt/plantao`.
 
-### 1. Banco de Dados
+| Caminho | Descrição | Permissão / Dono |
+|-------|----------|------------------|
+| `/opt/plantao/` | Diretório raiz | `opc:opc` |
+| `/opt/plantao/escala-plantao` | Executável principal (Go) | `opc:opc (+x)` |
+| `/opt/plantao/docker-compose.yml` | Orquestração do banco | `opc:opc` |
+| `/opt/plantao/.env` | Configuração local (opcional em prod) | `opc:opc` |
+| `/opt/plantao/certs/` | Certificados HTTPS | `opc:opc` |
+| `/etc/systemd/system/plantao.service` | Serviço do sistema | `root:root` |
 
-Certifique-se de que o Docker está rodando e inicie o container:
+---
 
-```bash
-cd /opt/plantao
-docker-compose up -d
-```
+## 3. Configuração do Serviço (Systemd)
 
-### 2. Compilação
+Em produção, as credenciais do banco são **injetadas diretamente pelo serviço**.
 
-Gere o binário compatível com Linux AMD64:
-
-```powershell
-# No PowerShell
-$env:CGO_ENABLED="0"
-$env:GOOS="linux"
-$env:GOARCH="amd64"
-go build -o escala-plantao
-```
-
-### 3. Instalação do Serviço
-
-- Mova o binário para `/opt/plantao`
-- Configure o arquivo `/etc/systemd/system/plantao.service`
-
-#### Variáveis de Ambiente Necessárias
-
-O Systemd deve injetar as variáveis para conectar na porta externa do Docker (**15432**):
+**Arquivo:** `/etc/systemd/system/plantao.service`
 
 ```ini
-Environment="DB_HOST=localhost"
-Environment="DB_PORT=5432"
-Environment="DB_USER=USUARIO_ADMIN"
-Environment="DB_PASS=SENHA_BANCO_DE_DADOS"
-Environment="DB_NAME=NOME_BANCO_DE_DADOS"
+[Unit]
+Description=Servico Escala Plantao
+After=network.target
+
+[Service]
+# Segurança: Roda com usuário comum
+User=opc
+Group=opc
+
+# Diretório de trabalho
+WorkingDirectory=/opt/plantao/
+
+# Caminho absoluto do binário
+ExecStart=/opt/plantao/escala-plantao
+
+# Permite ao usuário 'opc' abrir portas baixas (443)
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Reinicia automaticamente se cair
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-### 4. Comandos de Gerenciamento
+---
+
+## 4. Gerenciamento do Ambiente
+
+### 4.1 Aplicação (Backend Go)
 
 ```bash
-# Iniciar serviço
-sudo systemctl start plantao
-
-# Verificar logs
+sudo systemctl status plantao
 sudo journalctl -u plantao -f
+sudo systemctl restart plantao
+sudo systemctl stop plantao
+```
+
+### 4.2 Banco de Dados (Docker)
+
+```bash
+docker ps
+cd /opt/plantao
+docker-compose up -d
+docker logs -f openlabs_postgres
 ```
 
 ---
 
-## Estrutura do Projeto
+## 5. Processo de Atualização (Deploy)
 
-```text
-/
-├── main.go               # Código fonte principal (Go Server)
-├── docker-compose.yml    # Orquestração do PostgreSQL
-├── go.mod / go.sum       # Gerenciamento de dependências
-├── public/               # Frontend estático (embarcado no binário)
-│   ├── index.html        # Visão pública
-│   ├── admin.html        # Painel administrativo
-│   ├── login.html        # Tela de login
-│   ├── app.js            # Lógica do frontend
-│   └── style.css         # Estilização
-└── certs/                # Certificados SSL automáticos (gerados em produção)
+### 5.1 Compilação (Windows / Dev)
+
+```powershell
+$env:CGO_ENABLED="0"; $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o escala-plantao
+```
+
+### 5.2 Atualização no Servidor (Oracle Linux)
+
+```bash
+sudo systemctl stop plantao
+sudo chmod +x /opt/plantao/escala-plantao
+sudo chown -R opc:opc /opt/plantao
+sudo restorecon -Rv /opt/plantao/
+sudo systemctl start plantao
 ```
 
 ---
 
-## Variáveis de Ambiente
+## 6. Backup e Recuperação
 
-A aplicação aceita as seguintes variáveis de ambiente (padrões definidos no código):
+### 6.1 Backup do Banco de Dados
 
-| Variável   | Padrão        | Descrição                         |
-|------------|---------------|-----------------------------------|
-| DB_HOST    | localhost     | Host do PostgreSQL                |
-| DB_PORT    | 15432         | Porta mapeada no Docker Host      |
-| DB_USER    | admin         | Usuário do banco de dados         |
-| DB_PASS    | adminpassword | Senha do banco de dados           |
-| DB_NAME    | escala_db     | Nome do database                  |
+```bash
+docker exec openlabs_postgres pg_dump -U admin escala_db > /opt/plantao/backup_$(date +%F).sql
+```
+
+### 6.2 Backup dos Certificados
+
+Copiar o diretório:
+
+```
+/opt/plantao/certs/
+```
+---
+## 7. Variáveis de Ambiente
+
+| Variável           | Descrição                                                        | Exemplo de Valor        | Onde é usada?       |
+| ------------------ | ---------------------------------------------------------------- | ----------------------- | ------------------- |
+| `DB_HOST`          | Endereço do servidor do banco de dados.                          | localhost               | Go (Backend)        |
+| `DB_PORT_EXTERNAL` | Porta externa exposta pelo Docker para conexão.                  | 15432                   | Go + Docker Compose |
+| `DB_USER`          | Usuário para autenticação no PostgreSQL.                         | admin                   | Go + Docker Compose |
+| `DB_PASS`          | Senha do usuário do banco.                                       | admin123                | Go + Docker Compose |
+| `DB_NAME`          | Nome do banco de dados a ser criado ou utilizado pela aplicação. | escala_db               | Go + Docker Compose |
+| `ADMIN_PASSWORD`   | Senha de login no painel administrativo e token de API.          | admin123                | Go (Backend)        |
+| `DOMAIN_NAME`      | Domínio utilizado para geração do certificado HTTPS.             | plantao.openlabs.com.br | Go (Backend)        |
+
 
 ---
+
+## 8. Troubleshooting
+
+### 8.1 Erro: code=exited, status=203/EXEC
+
+```bash
+sudo restorecon -Rv /opt/plantao/
+```
+
+### 8.2 Erro: connect: connection refused
+
+- Verifique se o container está ativo (`docker ps`)
+- Confirme o mapeamento da porta **15432**
+
+### 8.3 Erro: password authentication failed
+
+- Verifique a senha no `plantao.service`
+- Confirme se é a mesma do `docker-compose.yml`

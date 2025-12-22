@@ -23,7 +23,7 @@ import (
 var publicFS embed.FS
 
 const (
-	adminPassword = "J727HCfmF4dL9P36n9rr"
+	adminPassword = "admin_123"
 	domainName    = "plantao.openlabs.com.br"
 )
 
@@ -68,7 +68,7 @@ func main() {
 	dbHost := getEnv("DB_HOST", "localhost")
 	dbPort := getEnv("DB_PORT", "15432")
 	dbUser := getEnv("DB_USER", "admin")
-	dbPass := getEnv("DB_PASS", "rr01dYZA6ltjP11lu0e2")
+	dbPass := getEnv("DB_PASS", "admin_123")
 	dbName := getEnv("DB_NAME", "escala_db")
 
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -325,3 +325,4 @@ func handlePessoaOperacoes(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 }
+
